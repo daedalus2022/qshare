@@ -3,6 +3,15 @@ name = "qshare"
 version = "0.1.0"
 edition = "2021"
 
+repository = "https://github.com/daedalus2022/qshare"
+keywords = ["stock", "quantization", "futures"]
+categories = ["quantization"]
+rust-version = "1.74.0-nightly"
+readme = "README.md"
+description = "量化数据：股票、期货等"
+license = "Apache-2.0"
+
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]

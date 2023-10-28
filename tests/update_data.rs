@@ -18,15 +18,15 @@ mod tests {
         let path = Path::new(
             "/Users/tom/work/01_code/github/rust/rbacktrader/temp/stock_data/source/sh000903.csv",
         );
-        let data = update_local_temp_data::load_csv(&path).ok().unwrap();
-        println!("now:{}", DateUtils::now_fmt_ymd());
-        let is_none = data
+        if let Ok(data) = update_local_temp_data::load_csv(&path){
+            println!("now:{}", DateUtils::now_fmt_ymd());
+            let is_none = data
             .iter()
             .find(|s| {
-                println!("111{}", s.get(1).unwrap().to_string());
                 s.get(1).unwrap().to_string() == DateUtils::now_fmt_ymd()
             })
             .is_none();
-        println!("is_none:{}, {:?}", is_none, data[1].get(1));
+            assert!(is_none);
+        }
     }
 }
