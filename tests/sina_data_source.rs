@@ -17,7 +17,7 @@ mod test {
         let data_source = SinaDataSource {};
         let df = data_source.real_time_spot_em_data().await?;
 
-        tracing::debug!("real time data is: {:?}", df);
+        println!("real time data is: {:?}", df);
 
         Ok(())
     }
