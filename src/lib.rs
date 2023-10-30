@@ -1,6 +1,9 @@
 use crate::utils::{DateUtils, Envs};
+use anyhow::Error;
 use async_trait::async_trait;
+use reqwest::Request;
 use core::convert::From;
+use std::collections::HashMap;
 use polars::datatypes::DataType;
 use polars::export::chrono::NaiveDate;
 use polars::frame::row::Row;
@@ -19,7 +22,6 @@ pub mod const_vars;
 pub mod sina;
 pub mod utils;
 
-pub mod update_local_temp_data;
 
 ///
 /// enum 数据驱动
@@ -27,7 +29,7 @@ pub mod update_local_temp_data;
 ///
 /// 数据服务，通过数据源和实现的数据类型增加获取数据的能力
 ///
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct DataResult<T> {
     pub data_id: Option<String>,
     pub data: Option<T>,
@@ -64,7 +66,7 @@ pub trait ResultCached<T> {
     ///
     /// 加载缓存
     ///
-    fn load(&self) -> Result<DataResult<T>, anyhow::Error>;
+    fn load(&self,schema: Option<Schema>) -> Result<DataResult<T>, anyhow::Error>;
 }
 
 ///
@@ -73,14 +75,49 @@ pub trait ResultCached<T> {
 #[async_trait]
 pub trait RealTimeData {
     ///
-    /// 指数实时行情
+    /// 实时行情
     ///
-    async fn real_time_spot_data(self) -> Result<DataResult<DataFrame>, anyhow::Error>;
+    async fn real_time_data(&self) -> Result<DataResult<DataFrame>, anyhow::Error>;
 
     ///
-    /// 股票实时行情
+    /// 加载缓存时schema信息
+    /// 
+    fn load_cached_schema(&self) -> Option<Schema>;
+}
+
+///
+/// data result 格式化处理
+/// 
+pub trait DataResultFormat{
     ///
-    async fn real_time_spot_em_data(self) -> Result<DataResult<DataFrame>, anyhow::Error>;
+    /// 对提供的数据进行处理生成DataFrame
+    /// 
+    fn to_dataframe(&self, source:Option<String>)->anyhow::Result<DataResult<DataFrame>>;
+
+    ///
+    /// 列别名
+    /// 
+    fn col_alias(&self) -> Option<HashMap<&'static str,&'static str>>;
+
+    ///
+    /// 格式化程序，包括列名重命名及加载缓存时schema信息
+    /// 
+    fn format(&self, data_result_format: Option<DataFrame>)->DataResult<DataFrame>;
+}
+
+///
+/// http data source
+/// 
+pub trait HttpSource{
+    ///
+    /// 构造请求
+    /// 
+    fn request(&self)->Request;
+
+    ///
+    /// id 生产策略
+    /// 
+    fn id(&self) -> String;
 }
 
 ///
@@ -131,7 +168,7 @@ impl ResultCached<DataFrame> for DataResult<DataFrame> {
         }
     }
 
-    fn load(&self) -> Result<DataResult<DataFrame>, anyhow::Error> {
+    fn load(&self, schema_opt: Option<Schema>) -> Result<DataResult<DataFrame>, anyhow::Error> {
         match &self.data_id {
             None => {
                 tracing::warn!("data_id 为空，加载缓存文件失败");
@@ -145,43 +182,24 @@ impl ResultCached<DataFrame> for DataResult<DataFrame> {
 
                 match data_frame_result {
                     Ok(csv_file) => {
-                        //代码,名称,最新价,涨跌幅,涨跌额,成交量,成交额,振幅,最高,最低,今开,昨收,量比,换手率,市盈率-动态,市净率,总市值,流通市值,涨速,5分钟涨跌,60日涨跌幅,年初至今涨跌幅,symbol
-                        let mut schema = Schema::new();
-                        schema.with_column("代码".to_string(), DataType::Utf8);
-                        schema.with_column("名称".to_string(), DataType::Utf8);
-                        schema.with_column("最新价".to_string(), DataType::Float64);
-                        schema.with_column("涨跌幅".to_string(), DataType::Float64);
-                        schema.with_column("涨跌额".to_string(), DataType::Float64);
-                        schema.with_column("成交量".to_string(), DataType::Float64);
-                        schema.with_column("成交额".to_string(), DataType::Float64);
-                        schema.with_column("振幅".to_string(), DataType::Float64);
-                        schema.with_column("最高".to_string(), DataType::Float64);
-                        schema.with_column("最低".to_string(), DataType::Float64);
-                        schema.with_column("今开".to_string(), DataType::Float64);
-                        schema.with_column("昨收".to_string(), DataType::Float64);
-                        schema.with_column("量比".to_string(), DataType::Float64);
-                        schema.with_column("换手率".to_string(), DataType::Float64);
-                        schema.with_column("市盈率-动态".to_string(), DataType::Float64);
-                        schema.with_column("市净率".to_string(), DataType::Float64);
-                        schema.with_column("总市值".to_string(), DataType::Float64);
-                        schema.with_column("流通市值".to_string(), DataType::Float64);
-                        schema.with_column("涨速".to_string(), DataType::Float64);
-                        schema.with_column("5分钟涨跌".to_string(), DataType::Float64);
-                        schema.with_column("60日涨跌幅".to_string(), DataType::Float64);
-                        schema.with_column("年初至今涨跌幅".to_string(), DataType::Float64);
-                        schema.with_column("symbol".to_string(), DataType::Utf8);
-
-                        let data_frame = csv_file
+                        if let Some(schema) = schema_opt{
+                            let data_frame = csv_file
                             .has_header(true)
                             .with_schema(&schema)
                             .with_parse_dates(true)
                             .finish()
                             .expect("TODO: panic message");
 
-                        Ok(DataResult {
-                            data_id: Some(id.clone()),
-                            data: Some(data_frame.clone()),
-                        })
+                            return Ok(DataResult {
+                                data_id: Some(id.clone()),
+                                data: Some(data_frame.clone()),
+                            });
+                        }else{
+                            tracing::warn!("load的schema为None,缓存数据可能加载错误或为空,请提供！！！")
+                        }
+
+                        Ok(DataResult::empty())
+                        
                     }
                     Err(e) => {
                         tracing::warn!("加载缓存文件{}, 解析失败:{}", &cache_file, e);
