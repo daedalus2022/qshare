@@ -126,7 +126,7 @@ impl DataResultFormat for EastmoneySpotEmDataSource {
 
     fn to_dataframe(&self, source: Option<String>) -> anyhow::Result<DataResult<DataFrame>> {
         if let Some(body) = source {
-            let start = body.find("[").unwrap();
+            let start = body.find('[').unwrap();
             let length = body.len();
             let json_data = String::from(&body[start..length - 2]).replace("\"-\"", "-1");
 

@@ -224,11 +224,9 @@ impl DataResult<DataFrame> {
 
     fn cache_file_name(data_id: &String) -> String {
         let cache_temp_home = Envs::cache_temp_home();
-
-        if !&Path::new(&cache_temp_home).try_exists().ok().unwrap() {
-            if IoUtils::create_dir_recursive(Path::new(&cache_temp_home)).is_err() {
-                tracing::warn!("{} 缓存目录创建失败", &cache_temp_home)
-            }
+        let path = Path::new(&cache_temp_home);
+        if !&path.try_exists().ok().unwrap() && IoUtils::create_dir_recursive(path).is_err() {
+            tracing::warn!("{} 缓存目录创建失败", &cache_temp_home);
         }
 
         format_args!(
