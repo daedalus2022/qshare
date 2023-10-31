@@ -1,17 +1,14 @@
 use crate::utils::{DateUtils, Envs};
-use anyhow::Error;
+
 use async_trait::async_trait;
-use reqwest::Request;
 use core::convert::From;
-use std::collections::HashMap;
-use polars::datatypes::DataType;
 use polars::export::chrono::NaiveDate;
 use polars::frame::row::Row;
 use polars::frame::DataFrame;
 use polars::io::{SerReader, SerWriter};
 use polars::prelude::{CsvReader, CsvWriter, JsonFormat, JsonReader, Schema};
+use reqwest::Request;
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
 use std::fs::File;
 use std::io::Cursor;
 use std::path::Path;
@@ -21,7 +18,6 @@ pub mod cffex;
 pub mod const_vars;
 pub mod sina;
 pub mod utils;
-
 
 ///
 /// enum 数据驱动
@@ -66,7 +62,7 @@ pub trait ResultCached<T> {
     ///
     /// 加载缓存
     ///
-    fn load(&self,schema: Option<Schema>) -> Result<DataResult<T>, anyhow::Error>;
+    fn load(&self, schema: Option<Schema>) -> Result<DataResult<T>, anyhow::Error>;
 }
 
 ///
@@ -81,42 +77,42 @@ pub trait RealTimeData {
 
     ///
     /// 加载缓存时schema信息
-    /// 
+    ///
     fn load_cached_schema(&self) -> Option<Schema>;
 }
 
 ///
 /// data result 格式化处理
-/// 
-pub trait DataResultFormat{
+///
+pub trait DataResultFormat {
     ///
     /// 对提供的数据进行处理生成DataFrame
-    /// 
-    fn to_dataframe(&self, source:Option<String>)->anyhow::Result<DataResult<DataFrame>>;
+    ///
+    fn to_dataframe(&self, source: Option<String>) -> anyhow::Result<DataResult<DataFrame>>;
 
     ///
     /// 列别名
-    /// 
-    fn col_alias(&self) -> Option<HashMap<&'static str,&'static str>>;
+    ///
+    fn col_alias(&self) -> Option<Vec<(&str, &str)>>;
 
     ///
     /// 格式化程序，包括列名重命名及加载缓存时schema信息
-    /// 
-    fn format(&self, data_result_format: Option<DataFrame>)->DataResult<DataFrame>;
+    ///
+    fn format(&self, data_result_format: Option<DataFrame>) -> DataResult<DataFrame>;
 }
 
 ///
 /// http data source
-/// 
-pub trait HttpSource{
+///
+pub trait HttpSource {
     ///
     /// 构造请求
-    /// 
-    fn request(&self)->Request;
+    ///
+    fn request(&self) -> Request;
 
     ///
     /// id 生产策略
-    /// 
+    ///
     fn id(&self) -> String;
 }
 
@@ -182,24 +178,25 @@ impl ResultCached<DataFrame> for DataResult<DataFrame> {
 
                 match data_frame_result {
                     Ok(csv_file) => {
-                        if let Some(schema) = schema_opt{
+                        if let Some(schema) = schema_opt {
                             let data_frame = csv_file
-                            .has_header(true)
-                            .with_schema(&schema)
-                            .with_parse_dates(true)
-                            .finish()
-                            .expect("TODO: panic message");
+                                .has_header(true)
+                                .with_schema(&schema)
+                                .with_parse_dates(true)
+                                .finish()
+                                .expect("TODO: panic message");
 
                             return Ok(DataResult {
                                 data_id: Some(id.clone()),
                                 data: Some(data_frame.clone()),
                             });
-                        }else{
-                            tracing::warn!("load的schema为None,缓存数据可能加载错误或为空,请提供！！！")
+                        } else {
+                            tracing::warn!(
+                                "load的schema为None,缓存数据可能加载错误或为空,请提供！！！"
+                            )
                         }
 
                         Ok(DataResult::empty())
-                        
                     }
                     Err(e) => {
                         tracing::warn!("加载缓存文件{}, 解析失败:{}", &cache_file, e);

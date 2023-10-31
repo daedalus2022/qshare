@@ -1,6 +1,6 @@
 use std::{fs, io::Error, path::Path};
 
-use crate::{const_vars, DataResult, RealTimeData, DataResultFormat};
+use crate::{const_vars, DataResult, DataResultFormat};
 use mime::Mime;
 use polars::export::chrono::Local;
 use polars::frame::DataFrame;
@@ -30,10 +30,13 @@ impl HttpClient {
         Ok(call_back_body(body))
     }
 
-    /// 
+    ///
     /// 使用 DataResultFormat 对结果进行处理
-    /// 
-    pub async fn exec_by_format(request: Request, format: impl DataResultFormat)-> Result<DataResult<DataFrame>, anyhow::Error> {
+    ///
+    pub async fn exec_by_format(
+        request: Request,
+        format: impl DataResultFormat,
+    ) -> Result<DataResult<DataFrame>, anyhow::Error> {
         tracing::debug!("request url: {:?}", request);
 
         let http_client = reqwest::Client::new();
@@ -42,23 +45,19 @@ impl HttpClient {
 
         match response.text().await {
             Ok(body) => {
-                        //1. 处理body
-                // match format.to_dataframe(Some(body))
-                if let Ok(data_frame) = format.to_dataframe(Some(body)){
+                //1. 处理body
+                if let Ok(data_frame) = format.to_dataframe(Some(body)) {
                     // 2. 格式化df
                     return Ok(format.format(data_frame.data));
                 }
             }
             Err(e) => {
                 tracing::warn!("http response text error:{}", e);
-            },
+            }
         }
-        
-        Ok(DataResult::default())
-        
-    }
 
-    
+        Ok(DataResult::default())
+    }
 
     /// 将服务器返回的 content-type 解析成 Mime 类型
     fn _get_content_type(resp: &Response) -> Option<Mime> {
